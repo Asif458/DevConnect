@@ -38,7 +38,7 @@ const feedbackSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
   // ===== Basic Info =====
   name: { type: String, required: true },
-  username: { type: String, unique: true, required: true },
+  username: { type: String },
  email: { type: String, unique: true, required: true, lowercase: true, trim: true },
  password: { type: String, required: true, select: false },
 
@@ -50,6 +50,10 @@ const userSchema = new mongoose.Schema({
   skills: [{ type: mongoose.Schema.Types.ObjectId, ref: "Skill" }],
   interests: [String],
   role: { type: String, enum: ["developer", "mentor", "admin"], default: "developer" },
+  
+  // For forgot password
+  resetOTP: String,          // store OTP hash
+  resetOTPExpiry: Date,      // OTP expiration timestamp
   isActive: { type: Boolean, default: true },
   isPremium: { type: Boolean, default: false },
   premiumExpiresAt: Date,
