@@ -1,12 +1,26 @@
 const User = require("../model/userSchema");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const generateToken = require("../utils/generateToken");
- 
 
-// ==========================
-// SIGNUP CONTROLLER
-// ==========================
+// ====================== GET LOGGED IN USER PROFILE ======================
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+
+    if (!user) 
+      return res.status(404).json({ message: "User not found" });
+
+    // Prevent caching sensitive user data
+    res.set("Cache-Control", "no-store");
+
+    res.status(200).json({ user });
+  } catch (error) {
+    console.error("Get Profile Error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ========================== SIGNUP CONTROLLER ==========================
 exports.signup = async (req, res) => {
   try {
     const { name, username, email, password, role } = req.body;
@@ -23,7 +37,7 @@ exports.signup = async (req, res) => {
 
     const userData = { name, username, email, password: hashedPassword, role };
 
-    // ROLE-SPECIFIC INITIALIZATION
+    // Role-specific initialization
     if (role === "mentor") {
       userData.mentorProfile = {
         expertise: [],
@@ -45,6 +59,7 @@ exports.signup = async (req, res) => {
 
     const user = await User.create(userData);
 
+    // Send JWT cookie
     generateToken(res, user._id, user.role);
 
     res.status(201).json({
@@ -63,9 +78,7 @@ exports.signup = async (req, res) => {
   }
 };
 
-// ==========================
-// LOGIN CONTROLLER
-// ==========================
+// ========================== LOGIN CONTROLLER ==========================
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -97,13 +110,11 @@ exports.login = async (req, res) => {
   }
 };
 
-// ==========================
-// LOGOUT CONTROLLER
-// ==========================
+// ========================== LOGOUT CONTROLLER ==========================
 exports.logout = (req, res) => {
   res.cookie("jwt", "", {
     httpOnly: true,
-    expires: new Date(0), // expire immediately
+    expires: new Date(0),
     secure: process.env.NODE_ENV === "production",
     sameSite: "Strict",
   });
