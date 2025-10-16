@@ -1,12 +1,12 @@
+// Load environment variables first thing
+require("dotenv").config();
+
 const express = require("express");
-const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
-
-dotenv.config();
 
 const app = express();
 
@@ -32,10 +32,10 @@ const PORT = process.env.PORT || 5000;
 
 connectDB()
   .then(() => {
-    console.log("  MongoDB connected successfully");
+    console.log("MongoDB connected successfully");
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => {
-    console.error("  MongoDB connection failed:", err.message);
+    console.error("MongoDB connection failed:", err.message);
     process.exit(1); // stop server if DB fails
   });

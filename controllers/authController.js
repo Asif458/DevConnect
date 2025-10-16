@@ -1,6 +1,7 @@
 const User = require("../model/userSchema");
 const bcrypt = require("bcryptjs");
 const generateToken = require("../utils/generateToken");
+const Skill = require("../model/skillSchema");
 const sendEmail = require("../utils/sendEmail"); // nodemailer wrapper
 const crypto = require("crypto");
 
@@ -47,59 +48,100 @@ exports.getProfile = async (req, res) => {
 };
 
 
-// ========================== SIGNUP CONTROLLER ==========================
-// ========================== SIGNUP CONTROLLER ==========================
+ 
+
 exports.signup = async (req, res) => {
   try {
-    const { name, username, email, password, role } = req.body;
-    if (!name || !email || !password || !role)
+    const { name, username, email, password, role, skills, experience, availability } = req.body;
+
+    // Basic validation
+    if (!name || !username || !email || !password || !role)
       return res.status(400).json({ message: "All fields are required." });
 
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ message: "Email already exists." });
+    const validRoles = ["mentor", "developer", "admin"];
+    if (!validRoles.includes(role))
+      return res.status(400).json({ message: "Invalid role selected." });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const userData = { name, username, email, password: hashedPassword, role };
+    const userData = {
+      name,
+      username,
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      role,
+    };
 
-    // ===== Role-specific initialization =====
-    if (role === "mentor") {
-      userData.mentorProfile = {
-        expertise: [],
-        verified: false,
-        approvedByAdmin: false,
-        experience: "",
-        sessionPrice: 0,
-        mentorshipPlans: [],
-        availability: [],
-      };
-
-      // Remove irrelevant fields
-      delete userData.skills;
-      delete userData.interests;
-      delete userData.adminProfile;
-
-    } else if (role === "developer") {
-      userData.skills = [];
-      userData.interests = [];
-
-      // Remove irrelevant fields
-      delete userData.mentorProfile;
-      delete userData.adminProfile;
-
-    } else if (role === "admin") {
-      return res
-        .status(403)
-        .json({ message: "Admin accounts cannot be created via signup." });
+    // Profile photo from multer & Cloudinary
+    if (req.file) {
+      userData.profilePhoto = req.file.path; // multer-storage-cloudinary provides the path
     }
 
+    // ==================== Skills / Expertise ====================
+    let skillIds = [];
+    if (skills) {
+      let parsedSkills;
+      try {
+        parsedSkills = Array.isArray(skills) ? skills : JSON.parse(skills);
+      } catch {
+        parsedSkills = skills.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+
+      for (let skillName of parsedSkills) {
+        let skillDoc = await Skill.findOne({ name: skillName });
+        if (!skillDoc) skillDoc = await Skill.create({ name: skillName });
+        skillIds.push(skillDoc._id);
+      }
+    }
+
+    // ==================== Role-specific fields ====================
+    if (role === "mentor") {
+      // Process availability correctly
+      let structuredAvailability = [];
+      if (availability) {
+        let parsedAvailability;
+        try {
+          parsedAvailability = Array.isArray(availability) ? availability : JSON.parse(availability);
+        } catch {
+          parsedAvailability = [];
+        }
+
+        // Group slots by day
+        const availabilityByDay = {};
+        parsedAvailability.forEach((slotString) => {
+          const [day, time] = slotString.split(" ");
+          if (!availabilityByDay[day]) availabilityByDay[day] = [];
+          availabilityByDay[day].push({ time, isBooked: false });
+        });
+
+        structuredAvailability = Object.entries(availabilityByDay).map(([day, slots]) => ({
+          day,
+          date: new Date(), // optional: can assign real date if needed
+          slots,
+        }));
+      }
+
+      userData.mentorProfile = {
+        expertise: skillIds,
+        experience: experience || "",
+        availability: structuredAvailability,
+        verified: false,
+        approvedByAdmin: false,
+        sessionPrice: 0,
+        mentorshipPlans: [],
+      };
+    } else if (role === "developer") {
+      userData.skills = skillIds;
+      userData.interests = [];
+    }
+
+    // Create the user
     const user = await User.create(userData);
 
-    // Send JWT cookie
+    // Generate JWT token in cookie
     generateToken(res, user._id, user.role);
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Signup successful",
       user: {
         id: user._id,
@@ -107,13 +149,18 @@ exports.signup = async (req, res) => {
         username: user.username,
         email: user.email,
         role: user.role,
+        profilePhoto: user.profilePhoto,
       },
     });
   } catch (error) {
-    console.error("Signup Error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Signup Error:", error.message || error);
+    console.error("Full error object:", error.response?.data || error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
 
 
 // ========================== LOGIN CONTROLLER ==========================
