@@ -7,6 +7,7 @@ const cors = require("cors");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const adminRoutes = require("./routes/adminRoutes")
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.get("/ping", (req, res) => res.json({ message: "pong" }));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Connect to DB first, then start server
 const PORT = process.env.PORT || 5000;
