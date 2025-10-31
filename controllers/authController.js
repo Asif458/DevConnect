@@ -231,3 +231,40 @@ exports.logout = (req, res) => {
   });
   res.status(200).json({ message: "Logged out successfully" });
 };
+
+
+exports.verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const user = await User.findOne({ email }).select("+password +otp +mentorProfile");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (!user.otp || !user.otp.code || user.otp.expiresAt < new Date())
+      return res.status(400).json({ message: "OTP expired or invalid" });
+
+    const isValid = await bcrypt.compare(otp, user.otp.code);
+    if (!isValid) return res.status(400).json({ message: "Invalid OTP" });
+
+    user.isVerified = true;
+    user.otp = undefined;
+
+    // Developers approved immediately, mentors remain pending
+    if (user.role === "developer") user.status = "approved";
+    if (user.role === "mentor") user.status = "pending";
+
+    await user.save();
+
+    res.status(200).json({
+      message: "OTP verified successfully",
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+    });
+  } catch (err) {
+    console.error("Verify OTP Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
